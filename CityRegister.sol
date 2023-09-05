@@ -46,22 +46,9 @@ import './StringUtils.sol';
 contract CityRegister is    Ownable,ERC20 {
     
     
-    string constant   rock = "rock" ;
-    string constant  paper = "paper";
-    string constant  scissors = "scissors";
-    bool   rockchosen = false;
-    bool   scissorschosen = false;
-    bool   paperchosen = false;
-    string choicemade;
-    bool   setprevwinnings = false;
-    uint   public prev_gamestaked;
-    string private _tokenname ="RPSTOKENS";
-    string private _tokensymbol= "RPS";
+
     address public _owner;
-    uint randNonce =0;
-    uint modulus =0;
-    uint _payfee=0;
-    uint maxWaitTime = 100;
+   
          
   
        struct City  {
@@ -192,5 +179,3 @@ function getCityParameters (address cityaddress, uint256 carbonemmission, uint25
  }
     
       // @dev register game, game id as random generator integer
-   
-
