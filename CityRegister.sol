@@ -1,5 +1,5 @@
 
-pragma solidity 0.8.2;
+pragma solidity ^0.8.20;
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol";
@@ -48,7 +48,9 @@ contract CityRegister is    Ownable,ERC20 {
     
 
     address public _owner;
-   
+     string private _tokenname ="RPSTOKENS";
+    string private _tokensymbol= "RPS";
+    uint _payfee=0;
          
   
        struct City  {
@@ -110,6 +112,19 @@ function payfee(address payable sender, address payable owneraddress, uint256 am
 
    // @dev registeration for game  
   // @params players name and address
+
+   function getLatitude (uint256 _lat ) external  returns (uint256){
+   return  (_lat);
+ }
+
+ function getLongitude (uint256 _lng ) external  returns (uint256){
+ return (_lng) ;
+ }
+
+ function getLocation (uint256 _lat, uint256 lng) public  returns (uint256,uint256){
+   return (_lat, lng) ;
+ }
+
   
     function registerCity(string memory _cityname, address payable _cityaddress, uint256 _amount, uint256 _lng, uint256 _lat, uint256 _carboncapacity) public  returns(string memory, address){
          // this means whoever is the owner is now the 
@@ -125,7 +140,7 @@ function payfee(address payable sender, address payable owneraddress, uint256 am
            if(registeredcities[_cityaddress] != _cityaddress){
            
             registeredcities[_cityaddress] =_cityaddress ;
-     uint256 mylocation = getLocation(_lng, _lat);
+      (uint256 mylng, uint256 mylat )  = getLocation(_lng, _lat);
          
             // @dev storing to memory
             newcity = City(_cityaddress,_cityname,location, _lng, _lat,  _carboncapacity, _amount,citycountid ); 
@@ -149,17 +164,6 @@ function payfee(address payable sender, address payable owneraddress, uint256 am
     }
 
 
- function getLatitude (uint256 _lat ) external  returns (uint finallat){
-   return  (_lat);
- }
-
- function getLongitude (uint256 _lng ) external  returns (uint finallng){
- return (_lng) ;
- }
-
- function getLocation (uint256 _lat, uint256 lng) external  returns (uint256 _lat,uint256 _lng   ){
-   return (_lat, _lng) ;
- }
 
 
 
@@ -179,3 +183,5 @@ function getCityParameters (address cityaddress, uint256 carbonemmission, uint25
  }
     
       // @dev register game, game id as random generator integer
+   
+
