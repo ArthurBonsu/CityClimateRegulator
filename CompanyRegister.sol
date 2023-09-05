@@ -1,5 +1,4 @@
-
-pragma solidity 0.8.2;
+pragma solidity ^0.8.20;
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/ERC20.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/IERC20.sol";
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol";
@@ -48,7 +47,9 @@ contract CompanyRegister is    Ownable,ERC20 {
     
 
     address public _owner;
-   
+     string private _tokenname ="RPSTOKENS";
+    string private _tokensymbol= "RPS";
+    uint _payfee=0;
          
   
        struct Company  {
@@ -69,7 +70,7 @@ contract CompanyRegister is    Ownable,ERC20 {
     mapping(address => address) registeredcompanies;
     mapping(address => uint256) balances;
 
-    mapping(address=>company)public _companystore;
+    mapping(address=>Company)public _companystore;
    mapping(address => bool) registeredornot;
      mapping(address => bool) paidcompanyescrowfee;
 
@@ -80,8 +81,8 @@ contract CompanyRegister is    Ownable,ERC20 {
     mapping(address => mapping(uint256 => uint256)) humidity;
   
   // @dev objects inheriting from previous structs
-   company  newcompany;   
-    company[] public newgamecompany;
+   Company  newcompany;   
+    Company[] public newgamecompany;
       
     
       
@@ -115,7 +116,7 @@ function payfee(address payable sender, address payable owneraddress, uint256 am
    // @dev registeration for game  
   // @params players name and address
   
-    function registercompany(string memory _companyname, address payable _companyaddress,address _cityaddress,  uint256 _amount, uint256 _lng, uint256 _lat, uint256 _carboncapacity) public  returns(address __companyaddress,address _cityaddress, string _companyname,uint256 location, uint256 _lng, uint256 _lat,  uint256 _carboncapacity,uint256 _amount,uint256 companycountid ){
+    function registercompany(string memory _companyname, address payable _companyaddress,address _cityaddress,  uint256 _amount, uint256 _lng, uint256 _lat, uint256 _carboncapacity) external  returns(address ,address , string ,uint256 , uint256 , uint256 ,  uint256,uint256 ,uint256 ){
          // this means whoever is the owner is now the 
          uint256 companycount = 0;
               require(msg.sender == _owner , "Caller is not owner");
@@ -164,13 +165,13 @@ function payfee(address payable sender, address payable owneraddress, uint256 am
  return (_lng) ;
  }
 
- function getLocation (uint256 _lat, uint256 lng) external  returns (uint256 _lat,uint256 _lng   ){
+ function getLocation (uint256 _lat, uint256 lng) external  returns (uint256,uint256   ){
    return (_lat, _lng) ;
  }
 
 
 
-function getcompanyParameters (address city, address companyaddress, uint256 carbonemmission, uint256 temperature, uint256 humidity) external returns (address city, uint256 _carbonemmission, uint256 _temperature, uint256 _humidity, uint256 _timeoftheday) {
+function getcompanyParameters (address city, address companyaddress, uint256 carbonemmission, uint256 temperature, uint256 humidity) external returns (address, uint256, uint256, uint256, uint256) {
      uint256 timeoftheday = block.timestamp; 
 
      temperature[companyaddress][timeoftheday] =temperature;
