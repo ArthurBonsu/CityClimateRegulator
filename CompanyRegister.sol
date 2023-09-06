@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "contracts/CityRegister.sol";
 
-contract CompanyRegister is CityRegister, ERC20, Ownable {
+contract CompanyRegister is Ownable, CityRegister {
     address public _owner;
     string private _tokenName = "RPSTOKENS";
     string private _tokenSymbol = "RPS";
-    uint256 private _payFee = 0;
 
     struct Company {
         address companyAddress;
@@ -23,8 +21,6 @@ contract CompanyRegister is CityRegister, ERC20, Ownable {
         uint256 companyCountId;
     }
 
-    uint256 public totalSupplyTokens = 1000000;
-
     mapping(address => bool) public registeredCompanies;
     mapping(address => bool) public paidCompanyEscrowFee;
     mapping(address => mapping(address => bool)) public checkIfCompanyIsInCity;
@@ -34,37 +30,18 @@ contract CompanyRegister is CityRegister, ERC20, Ownable {
     mapping(address => mapping(uint256 => uint256)) public carbonCapacityCompany;
     mapping(address => mapping(uint256 => uint256)) public humidity;
 
-
- /// checkimg carbon level of companiesw
-
- mapping(address => uint256) public companycarbonLevels;
+    mapping(address => uint256) public companycarbonLevels;
     mapping(address => uint256) public companymaxCreditLevels;
-      mapping(address => uint256) public companycarboncredit;
+    mapping(address => uint256) public companycarboncredit;
 
-    Company[] public newCompany;
-
-    event GetCompanyParams(
-        address indexed city,
-        address indexed companyAddress,
-        uint256 carbonEmission,
-        uint256 temperature,
-        uint256 humidity,
-        uint256 timeOfDay
-    );
-
-    constructor(address ownerAddress) ERC20(_tokenName, _tokenSymbol) {
+    constructor(address ownerAddress) {
         _owner = ownerAddress;
-        totalSupply();
     }
 
-    function payFees(address payable sender, address payable ownerAddress, uint256 amount) external payable {
-        _owner = ownerAddress;
-        _payFee = amount;
+    function payFees(address payable sender, uint256 amount) public payable {
         require(amount >= 10 ether, "Amount must be at least 10 ether");
-
-        (bool success, ) = _owner.call{value: _payFee}("");
+        (bool success, ) = sender.call{value: amount}("");
         require(success, "Payment failed");
-
         paidCompanyEscrowFee[sender] = true;
     }
 
@@ -80,14 +57,14 @@ contract CompanyRegister is CityRegister, ERC20, Ownable {
         uint256 companyCount = 0;
         require(msg.sender == _owner, "Caller is not the owner");
 
-        payFees(companyAddress, _owner, amount);
+        payFees(companyAddress, amount);
 
         if (!checkIfCompanyIsInCity[cityAddress][companyAddress]) {
             if (paidCompanyEscrowFee[companyAddress]) {
                 if (!registeredCompanies[companyAddress]) {
                     registeredCompanies[companyAddress] = true;
 
-                    uint256 myLocation = getLocation(lng, lat);
+                    string memory myLocation = getLocation(lng, lat);
 
                     companyStore[companyAddress] = Company({
                         companyAddress: companyAddress,
@@ -102,8 +79,6 @@ contract CompanyRegister is CityRegister, ERC20, Ownable {
                     });
 
                     checkIfCompanyIsInCity[cityAddress][companyAddress] = true;
-
-                    newCompany.push(companyStore[companyAddress]);
                 }
             }
         }
@@ -129,25 +104,44 @@ contract CompanyRegister is CityRegister, ERC20, Ownable {
     }
 
     function getLocation(uint256 lat, uint256 lng) internal pure returns (string memory) {
-        return string(abi.encodePacked("Lat: ", lat, ", Lng: ", lng));
+        return string(abi.encodePacked("Lat: ", uintToStr(lat), ", Lng: ", uintToStr(lng)));
     }
 
-    function getCompanyParameters(
-        address city,
-        address companyAddress,
-        uint256 carbonEmission,
-        uint256 temp,
-        uint256 humidity
-    ) external onlyOwner returns (address, uint256, uint256, uint256, uint256) {
-        uint256 timeOfDay = block.timestamp;
-
-        temperature[companyAddress][timeOfDay] = temp;
-        carbonCapacityCompany[companyAddress][timeOfDay] = carbonEmission;
-        humidity[companyAddress][timeOfDay] = humidity;
-
-        emit GetCompanyParams(city, companyAddress, carbonEmission, temp, humidity, timeOfDay);
-
-        return (city, companyAddress, carbonEmission, temp, humidity);
+    function uintToStr(uint256 value) internal pure returns (string memory) {
+        if (value == 0) {
+            return "0";
+        }
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) {
+            digits++;
+            temp /= 10;
+        }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits -= 1;
+            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
     }
 
+    function setMaximumCompanyCarbonLevel(address cityAddress, uint256 maximumCarbonLevel) external returns (address, uint256) {
+        // Check if the carbon level for the city is not set (initialized to 0)
+        if (companycarbonLevels[cityAddress] == 0) {
+            companymaxCreditLevels[cityAddress] = maximumCarbonLevel;
+        }
+
+        return (cityAddress, maximumCarbonLevel);
+    }
+
+    function getCompanyCarbonLevel(address cityAddress) external view returns (uint256) {
+        return companycarbonLevels[cityAddress];
+    }
+
+    function getCompanyCarbonCredit(address cityAddress) external  returns (uint256) {
+        uint256 companycarboncredits = companymaxCreditLevels[cityAddress] - companycarbonLevels[cityAddress];
+        companycarboncredit[cityAddress] = companycarboncredits;
+        return companycarboncredits;
+    }
 }
