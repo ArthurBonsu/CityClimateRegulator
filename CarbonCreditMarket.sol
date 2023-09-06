@@ -42,11 +42,15 @@ contract CarbonCreditMarket is CompanyRegister, Ownable  {
     }
 
     // Function for companies to trade carbon credits with USD
-    function trade(address buyer, address seller, uint256 carbonCredits, uint256 usdAmount) external onlyOwner {
+    function trade(address buyer, address seller, uint256 carbonCredits, uint256 usdAmount, address sendingcity) external onlyOwner {
         require(isBuying[buyer], "Buyer not interested in buying");
         require(isSelling[seller], "Seller not interested in selling");
 
         // Transfer carbon credits from seller to buyer
+        uint256 companycarboncredit = companycarboncredit[buyer]; 
+        uint256 citycarboncredit  = carboncredit[sendingcity];
+        // require the carbon credit to be greater than 45% of city carbon credit
+        require ( companycarboncredit > 0.75 * citycarboncredit, "Carbon is not enough");
         IERC20(carbonCreditToken).transferFrom(seller, buyer, carbonCredits);
 
         // Perform the swap on Uniswap V2
@@ -83,4 +87,3 @@ contract CarbonCreditMarket is CompanyRegister, Ownable  {
         }
     }
 }
-
