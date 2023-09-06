@@ -6,7 +6,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract CityRegister is ERC20, Ownable {
 
-  uint256 private payfee; 
     struct City {
         string name;
         string location;
@@ -23,13 +22,13 @@ contract CityRegister is ERC20, Ownable {
 
     mapping(address => uint256) public carbonLevels;
     mapping(address => uint256) public maxCreditLevels;
-      mapping(address => uint256) public carboncredit;
+    mapping(address => uint256) public carboncredit;
 
     constructor() ERC20("RPSTOKENS", "RPS") {
         _mint(msg.sender, 1000000 * 10 ** 18); // Mint 1,000,000 RPS tokens to the contract creator
     }
 
-    function payFee(address payable cityAddress, uint256 amount) external payable {
+    function payFee(address payable cityAddress, uint256 amount) public  payable {
         require(amount >= 10 ether, "Amount must be at least 10 ether");
         require(!paidCityEscrowFee[cityAddress], "Fee already paid for this city");
 
@@ -103,9 +102,9 @@ contract CityRegister is ERC20, Ownable {
         return carbonLevels[cityAddress];
     }
 
-    function getCarbonCredit(address cityAddress) external view returns (uint256) {
+    function getCarbonCredit(address cityAddress) external  returns (uint256) {
         uint256 carbonCredit = maxCreditLevels[cityAddress] - carbonLevels[cityAddress];
-        carboncredit[cityAddress] = carbonCredit; 
+        carboncredit[cityAddress] = carbonCredit;
         return carbonCredit;
     }
 }
