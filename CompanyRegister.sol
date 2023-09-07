@@ -34,10 +34,15 @@ contract CompanyRegister is Ownable, CityRegister {
     mapping(address => uint256) public companymaxCreditLevels;
     mapping(address => uint256) public companycarboncredit;
 
-    constructor(address ownerAddress) {
-        _owner = ownerAddress;
-    }
+      constructor(address __owner) ERC20("RPSTOKENS", "RPS") {
+        _mint(msg.sender, 1000000 * 10 ** 18); // Mint 1,000,000 RPS tokens to the contract creator
 
+        _owner =__owner;
+   
+     
+         totalSupply();
+
+    }
     function payFees(address payable sender, uint256 amount) public payable {
         require(amount >= 10 ether, "Amount must be at least 10 ether");
         (bool success, ) = sender.call{value: amount}("");
