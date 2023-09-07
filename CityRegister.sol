@@ -6,6 +6,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract CityRegister is ERC20, Ownable {
 
+       address _owner; 
+        uint256 _payfee =0; 
+               uint256 public totalsupplytokens = 1000000;
     struct City {
         string name;
         string location;
@@ -15,7 +18,7 @@ contract CityRegister is ERC20, Ownable {
         uint256 amountPaid;
         uint256 cityCountId;
     }
-
+        
     mapping(address => City) public cityStore;
     mapping(address => bool) public registeredCities;
     mapping(address => bool) public paidCityEscrowFee;
@@ -24,18 +27,28 @@ contract CityRegister is ERC20, Ownable {
     mapping(address => uint256) public maxCreditLevels;
     mapping(address => uint256) public carboncredit;
 
-    constructor() ERC20("RPSTOKENS", "RPS") {
+
+   
+    constructor(address __owner) ERC20("RPSTOKENS", "RPS") {
         _mint(msg.sender, 1000000 * 10 ** 18); // Mint 1,000,000 RPS tokens to the contract creator
+
+        _owner =__owner;
+   
+     
+         totalSupply();
+
     }
 
-    function payFee(address payable cityAddress, uint256 amount) public  payable {
+    function payFee(address payable sender,  uint256 amount) public  payable {
+             
+           
         require(amount >= 10 ether, "Amount must be at least 10 ether");
-        require(!paidCityEscrowFee[cityAddress], "Fee already paid for this city");
+        require(!paidCityEscrowFee[sender], "Fee already paid for this city");
 
-        (bool success, ) = cityAddress.call{value: amount}("");
+        (bool success, ) = sender.call{value: amount}("");
         require(success, "Payment failed");
 
-        paidCityEscrowFee[cityAddress] = true;
+        paidCityEscrowFee[sender] = true;
     }
 
     function registerCity(
