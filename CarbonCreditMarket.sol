@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -17,16 +16,18 @@ contract CarbonCreditMarket is CompanyRegister {
     mapping(address => bool) public isBuying;
     mapping(address => bool) public isSelling;
 
-    constructor(
+   
+constructor(
         address _uniswapRouter,
         address _carbonCreditToken,
         address _usdToken
-    ) {
+    ) CompanyRegister(msg.sender) {
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         carbonCreditToken = _carbonCreditToken;
         usdToken = _usdToken;
     }
 
+    
     // Function for companies to indicate interest in buying carbon credits
     function wantToBuy() external {
         require (registeredCompanies[msg.sender] == true); 
