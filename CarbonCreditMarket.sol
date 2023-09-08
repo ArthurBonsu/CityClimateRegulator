@@ -6,7 +6,7 @@ import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "contracts/CompanyRegister.sol";
 
-contract CarbonCreditMarket is CompanyRegister, Ownable  {
+contract CarbonCreditMarket is CompanyRegister {
     IUniswapV2Router02 public uniswapRouter;
     address public carbonCreditToken; // The address of the ERC20 token representing carbon credits
     address public usdToken; // The address of the USD or other asset token
@@ -50,7 +50,8 @@ contract CarbonCreditMarket is CompanyRegister, Ownable  {
         uint256 companycarboncredit = companycarboncredit[buyer]; 
         uint256 citycarboncredit  = carboncredit[sendingcity];
         // require the carbon credit to be greater than 45% of city carbon credit
-        require ( companycarboncredit > 0.75 * citycarboncredit, "Carbon is not enough");
+        require(companycarboncredit * 4 > 3 * citycarboncredit, "Carbon is not enough");
+
         IERC20(carbonCreditToken).transferFrom(seller, buyer, carbonCredits);
 
         // Perform the swap on Uniswap V2
