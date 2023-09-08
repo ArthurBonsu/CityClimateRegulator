@@ -12,12 +12,11 @@ contract CompanyRegister is Ownable, CityRegister {
     struct Company {
         address payable companyAddress;
         address city;
-        string name;
         string location;
         uint256 longitude;
         uint256 latitude;
         uint256 carbonCapacity;
-        uint256 amountPaid;
+       
     }
 
     mapping(address => bool) public registeredCompanies;
@@ -44,56 +43,44 @@ contract CompanyRegister is Ownable, CityRegister {
         paidCompanyEscrowFee[sender] = true;
     }
 
-    function registerCompany(
-        string memory companyName,
+    function registerCompany(  
         address payable companyAddress,
         address cityAddress,
         uint256 amount,
         uint256 lng,
         uint256 lat,
         uint256 carbonCapacity
-    ) external onlyOwner returns (address, string memory, uint256, uint256, uint256, uint256, uint256, uint256) {
-        uint256 companyCount = 0;
-        require(msg.sender == _owner, "Caller is not the owner");
+    ) external onlyOwner returns (address,address,uint256, string memory , uint256) {
+        require(paidCompanyEscrowFee[companyAddress] == false, "Company fee already paid");
+        require(registeredCompanies[companyAddress] == false, "Company already registered");
 
         payFees(companyAddress, amount);
 
-       if (!checkIfCompanyIsInCity[cityAddress][companyAddress]) {
-            if (paidCompanyEscrowFee[companyAddress]) {
-                if (!registeredCompanies[companyAddress]) {
-                    registeredCompanies[companyAddress] = true;
+        registeredCompanies[companyAddress] = true;
 
-                    string memory myLocation = getLocation(lng, lat);
+        string memory myLocation = getLocation(lng, lat);
 
-                    companyStore[companyAddress] = Company({
-                        companyAddress: companyAddress,
-                        city: cityAddress,
-                        name: companyName,
-                        location: myLocation,
-                        longitude: lng,
-                        latitude: lat,
-                        carbonCapacity: carbonCapacity,
-                        amountPaid: amount
-                    });
+        companyStore[companyAddress] = Company({
+            companyAddress: companyAddress,
+            city: cityAddress,
+            location: myLocation,
+            longitude: lng,
+            latitude: lat,
+            carbonCapacity: carbonCapacity
+       
+        });
 
-                    checkIfCompanyIsInCity[cityAddress][companyAddress] = true;
-                 }
-           
-            }
-     
-        }
+        checkIfCompanyIsInCity[cityAddress][companyAddress] = true;
 
-        return (
-            companyAddress,
-            companyName,
+         return (
+            companyAddress, 
+            cityAddress ,  
             amount,
-            lng,
-            lat,
-            carbonCapacity,
-            amount,
-            companyCount
+            myLocation, 
+            carbonCapacity
+            
+     // You need to determine the companyCountId
         );
-    
     }
 
     function getLatitude(uint256 lat) external pure returns (uint256) {
@@ -140,9 +127,8 @@ contract CompanyRegister is Ownable, CityRegister {
         return companycarbonLevels[cityAddress];
     }
 
-    function getCompanyCarbonCredit(address cityAddress) external returns (uint256) {
+    function getCompanyCarbonCredit(address cityAddress) external view returns (uint256) {
         uint256 companycarboncredits = companymaxCreditLevels[cityAddress] - companycarbonLevels[cityAddress];
-        companycarboncredit[cityAddress];
+        return companycarboncredits;
     }
-    
-    }
+}
