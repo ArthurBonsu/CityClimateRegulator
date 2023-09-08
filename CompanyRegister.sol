@@ -5,12 +5,12 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "contracts/CityRegister.sol";
 
 contract CompanyRegister is Ownable, CityRegister {
-    address public _owner;
+    
     string private _tokenName = "RPSTOKENS";
     string private _tokenSymbol = "RPS";
 
     struct Company {
-        address companyAddress;
+        address payable companyAddress;
         address city;
         string name;
         string location;
@@ -18,7 +18,6 @@ contract CompanyRegister is Ownable, CityRegister {
         uint256 latitude;
         uint256 carbonCapacity;
         uint256 amountPaid;
-        uint256 companyCountId;
     }
 
     mapping(address => bool) public registeredCompanies;
@@ -34,15 +33,10 @@ contract CompanyRegister is Ownable, CityRegister {
     mapping(address => uint256) public companymaxCreditLevels;
     mapping(address => uint256) public companycarboncredit;
 
-      constructor(address __owner) ERC20("RPSTOKENS", "RPS") {
-        _mint(msg.sender, 1000000 * 10 ** 18); // Mint 1,000,000 RPS tokens to the contract creator
-
-        _owner =__owner;
-   
-     
-         totalSupply();
-
+    constructor(address __owner) CityRegister(__owner) {
+        // Initialize state variables if needed
     }
+
     function payFees(address payable sender, uint256 amount) public payable {
         require(amount >= 10 ether, "Amount must be at least 10 ether");
         (bool success, ) = sender.call{value: amount}("");
@@ -64,7 +58,7 @@ contract CompanyRegister is Ownable, CityRegister {
 
         payFees(companyAddress, amount);
 
-        if (!checkIfCompanyIsInCity[cityAddress][companyAddress]) {
+       if (!checkIfCompanyIsInCity[cityAddress][companyAddress]) {
             if (paidCompanyEscrowFee[companyAddress]) {
                 if (!registeredCompanies[companyAddress]) {
                     registeredCompanies[companyAddress] = true;
@@ -79,13 +73,14 @@ contract CompanyRegister is Ownable, CityRegister {
                         longitude: lng,
                         latitude: lat,
                         carbonCapacity: carbonCapacity,
-                        amountPaid: amount,
-                        companyCountId: companyCount
+                        amountPaid: amount
                     });
 
                     checkIfCompanyIsInCity[cityAddress][companyAddress] = true;
-                }
+                 }
+           
             }
+     
         }
 
         return (
@@ -98,6 +93,7 @@ contract CompanyRegister is Ownable, CityRegister {
             amount,
             companyCount
         );
+    
     }
 
     function getLatitude(uint256 lat) external pure returns (uint256) {
@@ -144,9 +140,9 @@ contract CompanyRegister is Ownable, CityRegister {
         return companycarbonLevels[cityAddress];
     }
 
-    function getCompanyCarbonCredit(address cityAddress) external  returns (uint256) {
+    function getCompanyCarbonCredit(address cityAddress) external returns (uint256) {
         uint256 companycarboncredits = companymaxCreditLevels[cityAddress] - companycarbonLevels[cityAddress];
-        companycarboncredit[cityAddress] = companycarboncredits;
-        return companycarboncredits;
+        companycarboncredit[cityAddress];
     }
-}
+    
+    }
