@@ -6,9 +6,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract CityRegister is ERC20, Ownable {
 
-       address _owner; 
-        uint256 _payfee =0; 
-               uint256 public totalsupplytokens = 1000000;
+    address _owner;
+    uint256 _payfee = 0;
+    uint256 public totalsupplytokens = 1000000;
+
     struct City {
         string name;
         string location;
@@ -18,7 +19,7 @@ contract CityRegister is ERC20, Ownable {
         uint256 amountPaid;
         uint256 cityCountId;
     }
-        
+
     mapping(address => City) public cityStore;
     mapping(address => bool) public registeredCities;
     mapping(address => bool) public paidCityEscrowFee;
@@ -27,21 +28,13 @@ contract CityRegister is ERC20, Ownable {
     mapping(address => uint256) public maxCreditLevels;
     mapping(address => uint256) public carboncredit;
 
-
-   
     constructor(address __owner) ERC20("RPSTOKENS", "RPS") {
         _mint(msg.sender, 1000000 * 10 ** 18); // Mint 1,000,000 RPS tokens to the contract creator
-
-        _owner =__owner;
-   
-     
-         totalSupply();
-
+        _owner = __owner;
+        totalSupply();
     }
 
-    function payFee(address payable sender,  uint256 amount) public  payable {
-             
-           
+    function payFee(address payable sender, uint256 amount) public payable {
         require(amount >= 10 ether, "Amount must be at least 10 ether");
         require(!paidCityEscrowFee[sender], "Fee already paid for this city");
 
@@ -115,7 +108,7 @@ contract CityRegister is ERC20, Ownable {
         return carbonLevels[cityAddress];
     }
 
-    function getCarbonCredit(address cityAddress) external  returns (uint256) {
+    function getCarbonCredit(address cityAddress) external returns (uint256) {
         uint256 carbonCredit = maxCreditLevels[cityAddress] - carbonLevels[cityAddress];
         carboncredit[cityAddress] = carbonCredit;
         return carbonCredit;
