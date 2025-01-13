@@ -3,114 +3,180 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract CityRegister is ERC20, Ownable {
+    using SafeMath for uint256;
 
-    address _owner;
-    uint256 _payfee = 0;
-    uint256 public totalsupplytokens = 1000000;
+    // Struct to store daily measurement
+    struct DailyMeasurement {
+        uint256 timestamp;
+        uint256 value;     // Stored as value * 1e18 for precision
+        bool recorded;
+    }
+
+    // Struct to store sector data
+    struct SectorData {
+        mapping(uint256 => DailyMeasurement) dailyData;  // timestamp => measurement
+        uint256[] recordedDates;
+        uint256 baselineValue;
+        uint256 rollingAverage;    // Stored as value * 1e18
+        uint256 maxHistoricalValue;
+        bool isActive;
+    }
 
     struct City {
         string name;
-        string location;
-        uint256 longitude;
-        uint256 latitude;
-        uint256 carbonCapacity;
-        uint256 amountPaid;
-        uint256 cityCountId;
+        bool isRegistered;
+        mapping(string => SectorData) sectors;
+        string[] activeSectors;
+        uint256 registrationDate;
     }
 
-    mapping(address => City) public cityStore;
-    mapping(address => bool) public registeredCities;
-    mapping(address => bool) public paidCityEscrowFee;
+    mapping(string => City) public cities;
+    string[] public registeredCityNames;
 
-    mapping(address => uint256) public carbonLevels;
-    mapping(address => uint256) public maxCreditLevels;
-    mapping(address => uint256) public carboncredit;
-
-    constructor(address __owner) ERC20("RPSTOKENS", "RPS") {
-        _mint(msg.sender, 1000000 * 10 ** 18); // Mint 1,000,000 RPS tokens to the contract creator
-        _owner = __owner;
-        totalSupply();
-    }
-
-    function payFee(address payable sender, uint256 amount) public payable {
-        require(amount >= 10 ether, "Amount must be at least 10 ether");
-        require(!paidCityEscrowFee[sender], "Fee already paid for this city");
-
-        (bool success, ) = sender.call{value: amount}("");
-        require(success, "Payment failed");
-
-        paidCityEscrowFee[sender] = true;
-    }
-
-    function registerCity(
-        string memory cityName,
-        address payable cityAddress,
-        uint256 amount,
-        uint256 lng,
-        uint256 lat,
-        uint256 carbonCapacity
-    ) external onlyOwner {
-        require(!registeredCities[cityAddress], "City is already registered");
-
-        payFee(cityAddress, amount);
-
-        registeredCities[cityAddress] = true;
-
-        City storage newCity = cityStore[cityAddress];
-        newCity.name = cityName;
-        newCity.location = string(abi.encodePacked("Lat: ", lat, ", Lng: ", lng));
-        newCity.longitude = lng;
-        newCity.latitude = lat;
-        newCity.carbonCapacity = carbonCapacity;
-        newCity.amountPaid = amount;
-        newCity.cityCountId = totalSupply(); // Assign an ID based on total supply
-
-        _mint(cityAddress, amount); // Mint tokens to the registered city
-    }
-
-    function getCityParameters(
-        address cityAddress,
-        uint256 carbonEmission,
-        uint256 temp,
-        uint256 humidity
-    ) external onlyOwner {
-        uint256 timeOfDay = block.timestamp;
-
-        // Store city parameters
-        cityStore[cityAddress].carbonCapacity = carbonEmission;
-        cityStore[cityAddress].longitude = temp;
-        cityStore[cityAddress].latitude = humidity;
-        carbonLevels[cityAddress] = carbonEmission;
-
-        emit GetCityParams(cityAddress, carbonEmission, temp, humidity, timeOfDay);
-    }
-
-    event GetCityParams(
-        address indexed cityAddress,
-        uint256 carbonEmission,
-        uint256 temp,
-        uint256 humidity,
-        uint256 timeOfDay
+    // Events
+    event CityRegistered(string cityName, uint256 timestamp);
+    event SectorAdded(string cityName, string sectorName, uint256 timestamp);
+    event DailyDataRecorded(
+        string indexed cityName,
+        string indexed sector,
+        uint256 timestamp,
+        uint256 value
     );
 
-    function setMaximumCarbonLevel(address cityAddress, uint256 maximumCarbonLevel) external returns (address, uint256) {
-        // Check if the carbon level for the city is not set (initialized to 0)
-        if (carbonLevels[cityAddress] == 0) {
-            maxCreditLevels[cityAddress] = maximumCarbonLevel;
+    constructor() ERC20("RPSTOKENS", "RPS") {
+        _mint(msg.sender, 1000000 * 10 ** decimals());
+    }
+
+    function registerCity(string memory cityName) external onlyOwner {
+        require(bytes(cityName).length > 0, "City name cannot be empty");
+        require(!cities[cityName].isRegistered, "City already registered");
+
+        City storage newCity = cities[cityName];
+        newCity.name = cityName;
+        newCity.isRegistered = true;
+        newCity.registrationDate = block.timestamp;
+
+        registeredCityNames.push(cityName);
+        
+        emit CityRegistered(cityName, block.timestamp);
+    }
+
+    function addSector(string memory cityName, string memory sectorName) external onlyOwner {
+        require(cities[cityName].isRegistered, "City not registered");
+        require(!cities[cityName].sectors[sectorName].isActive, "Sector already exists");
+
+        City storage city = cities[cityName];
+        SectorData storage newSector = city.sectors[sectorName];
+        newSector.isActive = true;
+        city.activeSectors.push(sectorName);
+
+        emit SectorAdded(cityName, sectorName, block.timestamp);
+    }
+
+    function recordDailyValue(
+        string memory cityName,
+        string memory sectorName,
+        uint256 timestamp,
+        uint256 value
+    ) external onlyOwner {
+        require(cities[cityName].isRegistered, "City not registered");
+        require(cities[cityName].sectors[sectorName].isActive, "Sector not active");
+
+        // Convert the small decimal to a larger integer by multiplying by 1e18
+        uint256 scaledValue = value * 1e18;
+        
+        SectorData storage sector = cities[cityName].sectors[sectorName];
+        
+        // Store the daily measurement
+        DailyMeasurement storage measurement = sector.dailyData[timestamp];
+        require(!measurement.recorded, "Data already recorded for this date");
+        
+        measurement.timestamp = timestamp;
+        measurement.value = scaledValue;
+        measurement.recorded = true;
+        sector.recordedDates.push(timestamp);
+
+        // Update maximum historical value if necessary
+        if (scaledValue > sector.maxHistoricalValue) {
+            sector.maxHistoricalValue = scaledValue;
         }
 
-        return (cityAddress, maximumCarbonLevel);
+        // Update rolling average
+        uint256 daysToAverage = 7; // Weekly rolling average
+        uint256 totalValues = 0;
+        uint256 count = 0;
+        
+        for (uint256 i = sector.recordedDates.length; i > 0 && count < daysToAverage; i--) {
+            totalValues = totalValues.add(sector.dailyData[sector.recordedDates[i-1]].value);
+            count++;
+        }
+        
+        if (count > 0) {
+            sector.rollingAverage = totalValues.div(count);
+        }
+
+        emit DailyDataRecorded(cityName, sectorName, timestamp, scaledValue);
     }
 
-    function getCarbonLevel(address cityAddress) external view returns (uint256) {
-        return carbonLevels[cityAddress];
+    function getDailyValue(
+        string memory cityName,
+        string memory sectorName,
+        uint256 timestamp
+    ) external view returns (uint256 value, bool recorded) {
+        require(cities[cityName].isRegistered, "City not registered");
+        require(cities[cityName].sectors[sectorName].isActive, "Sector not active");
+
+        DailyMeasurement storage measurement = cities[cityName].sectors[sectorName].dailyData[timestamp];
+        return (measurement.value, measurement.recorded);
     }
 
-    function getCarbonCredit(address cityAddress) external returns (uint256) {
-        uint256 carbonCredit = maxCreditLevels[cityAddress] - carbonLevels[cityAddress];
-        carboncredit[cityAddress] = carbonCredit;
-        return carbonCredit;
+    function getSectorStats(
+        string memory cityName,
+        string memory sectorName
+    ) external view returns (
+        uint256 totalRecordings,
+        uint256 maxValue,
+        uint256 rollingAverage
+    ) {
+        require(cities[cityName].isRegistered, "City not registered");
+        require(cities[cityName].sectors[sectorName].isActive, "Sector not active");
+
+        SectorData storage sector = cities[cityName].sectors[sectorName];
+        return (
+            sector.recordedDates.length,
+            sector.maxHistoricalValue,
+            sector.rollingAverage
+        );
+    }
+
+    function getActiveSectors(string memory cityName) 
+        external 
+        view 
+        returns (string[] memory) 
+    {
+        require(cities[cityName].isRegistered, "City not registered");
+        return cities[cityName].activeSectors;
+    }
+
+    function calculateCarbonCredit(
+        string memory cityName,
+        string memory sectorName,
+        uint256 timestamp
+    ) external view returns (uint256) {
+        require(cities[cityName].isRegistered, "City not registered");
+        require(cities[cityName].sectors[sectorName].isActive, "Sector not active");
+
+        SectorData storage sector = cities[cityName].sectors[sectorName];
+        DailyMeasurement storage measurement = sector.dailyData[timestamp];
+        require(measurement.recorded, "No data recorded for this date");
+
+        if (measurement.value >= sector.maxHistoricalValue) {
+            return 0;
+        }
+
+        return sector.maxHistoricalValue.sub(measurement.value);
     }
 }
