@@ -1,151 +1,214 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
+// Base contract for handling renewal theory calculations
 contract RenewalTheoryContract {
     using SafeMath for uint256;
 
-    struct RenewalData {
-        uint256 lastRenewalTime;
+    struct SectorData {
+        uint256 value;
+        uint256 timestamp;
         uint256 totalRenewals;
         uint256[] renewalTimes;
         uint256[] creditAmounts;
-        uint256 cumulativeTemperatureReduction;
+        uint256 cumulativeReduction;
     }
 
-    struct CreditAllowance {
+    struct CityData {
+        mapping(string => SectorData) sectors;
         uint256 baseAllowance;
         uint256 seasonalFactor;
         uint256 emergencyBuffer;
         uint256 lastCalculationTime;
     }
 
-    mapping(string => RenewalData) public cityRenewals;
-    mapping(string => CreditAllowance) public cityAllowances;
+    mapping(string => CityData) public cities;
 
-    // Constants for renewal theory calculations
-    uint256 public constant MIN_RENEWAL_INTERVAL = 7 days;
-    uint256 public constant MAX_RENEWAL_RATE = 52; // Maximum renewals per year
-    uint256 public constant BASE_TEMPERATURE_IMPACT = 100; // 1°C in basis points
+    // Constants
+    uint256 public constant MIN_RENEWAL_INTERVAL = 1 days;
+    uint256 public constant MAX_RENEWAL_RATE = 365; // Daily data
+    uint256 public constant BASE_IMPACT = 100; // 1 unit in basis points
     uint256 public constant SEASONAL_VARIATION = 20; // 20% seasonal variation
 
-    event RenewalProcessed(string city, uint256 timestamp, uint256 credits);
+    event RenewalProcessed(string city, string sector, uint256 timestamp, uint256 credits);
     event AllowanceUpdated(string city, uint256 newAllowance);
-    event TemperatureReduced(string city, uint256 reduction);
+    event ReductionRecorded(string city, string sector, uint256 reduction);
 
-    // Initialize city in the renewal system
     function initializeCity(string memory city, uint256 baseAllowance) external {
-        require(cityAllowances[city].baseAllowance == 0, "City already initialized");
+        require(cities[city].baseAllowance == 0, "City already initialized");
         
-        cityAllowances[city] = CreditAllowance({
-            baseAllowance: baseAllowance,
-            seasonalFactor: 100, // 100% base factor
-            emergencyBuffer: baseAllowance.div(10), // 10% emergency buffer
-            lastCalculationTime: block.timestamp
-        });
+        cities[city].baseAllowance = baseAllowance;
+        cities[city].seasonalFactor = 100;
+        cities[city].emergencyBuffer = baseAllowance.div(10);
+        cities[city].lastCalculationTime = block.timestamp;
     }
 
-    // Calculate renewal probability using exponential distribution
-    function calculateRenewalProbability(string memory city) public view returns (uint256) {
-        RenewalData storage renewalData = cityRenewals[city];
-        if (renewalData.lastRenewalTime == 0) return 100; // 100% for first renewal
-
-        uint256 timeSinceLastRenewal = block.timestamp.sub(renewalData.lastRenewalTime);
-        uint256 lambda = 1e18; // Base rate parameter
+    function recordSectorValue(
+        string memory city,
+        string memory sector,
+        uint256 value,
+        uint256 timestamp
+    ) external {
+        require(cities[city].baseAllowance != 0, "City not initialized");
         
-        // P(T > t) = e^(-λt)
-        uint256 probability = exponentialProbability(lambda, timeSinceLastRenewal);
-        return probability;
+        SectorData storage sectorData = cities[city].sectors[sector];
+        sectorData.value = value;
+        sectorData.timestamp = timestamp;
+        
+        processRenewal(city, sector);
     }
 
-    // Simplified exponential probability calculation
-    function exponentialProbability(uint256 lambda, uint256 time) internal pure returns (uint256) {
-        // Using linear approximation for demonstration
-        uint256 maxProbability = 100;
-        uint256 timeLimit = 30 days;
+    function processRenewal(string memory city, string memory sector) internal {
+        SectorData storage sectorData = cities[city].sectors[sector];
         
-        if (time >= timeLimit) return maxProbability;
-        return time.mul(maxProbability).div(timeLimit);
+        if (canRenew(city, sector)) {
+            uint256 credits = calculateCreditAmount(city, sector);
+            uint256 reduction = calculateReduction(credits);
+
+            sectorData.totalRenewals = sectorData.totalRenewals.add(1);
+            sectorData.renewalTimes.push(block.timestamp);
+            sectorData.creditAmounts.push(credits);
+            sectorData.cumulativeReduction = sectorData.cumulativeReduction.add(reduction);
+
+            emit RenewalProcessed(city, sector, block.timestamp, credits);
+            emit ReductionRecorded(city, sector, reduction);
+        }
     }
 
-    // Process a renewal request
-    function processRenewal(string memory city) external returns (uint256) {
-        require(canRenew(city), "Renewal not allowed at this time");
+    function canRenew(string memory city, string memory sector) public view returns (bool) {
+        SectorData storage sectorData = cities[city].sectors[sector];
         
-        RenewalData storage renewalData = cityRenewals[city];
-        CreditAllowance storage allowance = cityAllowances[city];
-
-        uint256 credits = calculateCreditAmount(city);
-        uint256 temperatureReduction = calculateTemperatureReduction(credits);
-
-        renewalData.lastRenewalTime = block.timestamp;
-        renewalData.totalRenewals = renewalData.totalRenewals.add(1);
-        renewalData.renewalTimes.push(block.timestamp);
-        renewalData.creditAmounts.push(credits);
-        renewalData.cumulativeTemperatureReduction = 
-            renewalData.cumulativeTemperatureReduction.add(temperatureReduction);
-
-        emit RenewalProcessed(city, block.timestamp, credits);
-        emit TemperatureReduced(city, temperatureReduction);
-
-        return credits;
+        if (sectorData.totalRenewals == 0) return true;
+        
+        uint256 lastRenewalTime = sectorData.renewalTimes[sectorData.renewalTimes.length - 1];
+        uint256 timeSinceLastRenewal = block.timestamp.sub(lastRenewalTime);
+        
+        return timeSinceLastRenewal >= MIN_RENEWAL_INTERVAL;
     }
 
-    // Check if renewal is allowed
-    function canRenew(string memory city) public view returns (bool) {
-        RenewalData storage renewalData = cityRenewals[city];
+    function calculateCreditAmount(string memory city, string memory sector) public view returns (uint256) {
+        CityData storage cityData = cities[city];
+        SectorData storage sectorData = cityData.sectors[sector];
         
-        if (renewalData.lastRenewalTime == 0) return true;
+        uint256 baseAmount = cityData.baseAllowance.mul(cityData.seasonalFactor).div(100);
         
-        uint256 timeSinceLastRenewal = block.timestamp.sub(renewalData.lastRenewalTime);
-        if (timeSinceLastRenewal < MIN_RENEWAL_INTERVAL) return false;
-        
-        uint256 annualRenewalRate = calculateAnnualRenewalRate(city);
-        return annualRenewalRate < MAX_RENEWAL_RATE;
-    }
-
-    // Calculate credit amount based on renewal theory
-    function calculateCreditAmount(string memory city) public view returns (uint256) {
-        CreditAllowance storage allowance = cityAllowances[city];
-        
-        // Base amount adjusted by seasonal factor
-        uint256 baseAmount = allowance.baseAllowance.mul(allowance.seasonalFactor).div(100);
-        
-        // Add emergency buffer if needed
-        if (isEmergencyCondition(city)) {
-            baseAmount = baseAmount.add(allowance.emergencyBuffer);
+        if (isEmergencyCondition(city, sector)) {
+            baseAmount = baseAmount.add(cityData.emergencyBuffer);
         }
         
-        return baseAmount;
+        return baseAmount.mul(sectorData.value);
     }
 
-    // Calculate temperature reduction from credits
-    function calculateTemperatureReduction(uint256 credits) public pure returns (uint256) {
-        return credits.mul(BASE_TEMPERATURE_IMPACT).div(1e4);
+    function calculateReduction(uint256 credits) public pure returns (uint256) {
+        return credits.mul(BASE_IMPACT).div(1e4);
     }
 
-    // Calculate annual renewal rate
-    function calculateAnnualRenewalRate(string memory city) public view returns (uint256) {
-        RenewalData storage renewalData = cityRenewals[city];
-        if (renewalData.totalRenewals == 0) return 0;
+    function isEmergencyCondition(string memory city, string memory sector) public view returns (bool) {
+        SectorData storage sectorData = cities[city].sectors[sector];
+        return sectorData.value > 0.001 ether; // Example threshold
+    }
+}
+
+contract CarbonCreditMarket is RenewalTheoryContract, Ownable {
+    using SafeMath for uint256;
+
+    IUniswapV2Router02 public uniswapRouter;
+    address public carbonCreditToken;
+    address public usdToken;
+
+    struct CompanyData {
+        bool isRegistered;
+        uint256 carbonCredits;
+        bool isBuying;
+        bool isSelling;
+    }
+
+    mapping(address => CompanyData) public companies;
+    address[] public buyersList;
+    address[] public sellersList;
+
+    constructor(
+        address _uniswapRouter,
+        address _carbonCreditToken,
+        address _usdToken
+    ) {
+        uniswapRouter = IUniswapV2Router02(_uniswapRouter);
+        carbonCreditToken = _carbonCreditToken;
+        usdToken = _usdToken;
+    }
+
+    function registerCompany(address company) external onlyOwner {
+        require(!companies[company].isRegistered, "Company already registered");
+        companies[company].isRegistered = true;
+    }
+
+    function wantToBuy() external {
+        require(companies[msg.sender].isRegistered, "Company not registered");
+        require(!companies[msg.sender].isBuying, "Already in buyers list");
         
-        uint256 timespan = block.timestamp.sub(renewalData.renewalTimes[0]);
-        if (timespan == 0) return 0;
+        companies[msg.sender].isBuying = true;
+        buyersList.push(msg.sender);
+    }
+
+    function wantToSell() external {
+        require(companies[msg.sender].isRegistered, "Company not registered");
+        require(!companies[msg.sender].isSelling, "Already in sellers list");
         
-        return renewalData.totalRenewals.mul(365 days).div(timespan);
+        companies[msg.sender].isSelling = true;
+        sellersList.push(msg.sender);
     }
 
-    // Check for emergency conditions
-    function isEmergencyCondition(string memory city) public pure returns (bool) {
-        // Implement emergency condition logic
-        return false;
+    function trade(
+        address buyer,
+        address seller,
+        uint256 carbonCredits,
+        uint256 usdAmount,
+        string memory city,
+        string memory sector
+    ) external onlyOwner {
+        require(companies[buyer].isBuying, "Buyer not interested");
+        require(companies[seller].isSelling, "Seller not interested");
+        
+        SectorData storage sectorData = cities[city].sectors[sector];
+        require(carbonCredits.mul(4) > sectorData.cumulativeReduction.mul(3), "Insufficient carbon credits");
+
+        // Handle token transfers
+        IERC20(carbonCreditToken).transferFrom(seller, buyer, carbonCredits);
+        
+        // Perform Uniswap swap
+        address[] memory path = new address[](2);
+        path[0] = carbonCreditToken;
+        path[1] = usdToken;
+        
+        uniswapRouter.swapExactTokensForTokens(
+            carbonCredits,
+            usdAmount,
+            path,
+            address(this),
+            block.timestamp
+        );
+
+        IERC20(usdToken).transfer(seller, usdAmount);
+        
+        // Update company status
+        removeFromList(buyer, buyersList);
+        removeFromList(seller, sellersList);
+        companies[buyer].isBuying = false;
+        companies[seller].isSelling = false;
     }
 
-    // Update seasonal factors
-    function updateSeasonalFactor(string memory city, uint256 newFactor) external {
-        require(newFactor >= 50 && newFactor <= 150, "Invalid seasonal factor");
-        cityAllowances[city].seasonalFactor = newFactor;
-        emit AllowanceUpdated(city, calculateCreditAmount(city));
+    function removeFromList(address company, address[] storage list) internal {
+        for (uint256 i = 0; i < list.length; i++) {
+            if (list[i] == company) {
+                list[i] = list[list.length - 1];
+                list.pop();
+                break;
+            }
+        }
     }
 }
