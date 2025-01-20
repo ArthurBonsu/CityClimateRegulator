@@ -35,10 +35,13 @@ contract CityRegister is ERC20, Ownable {
 
     mapping(string => City) public cities;
     string[] public registeredCityNames;
+    
+    uint256 public constant SCALE_FACTOR = 1e18;
+    uint256 public constant ROLLING_AVERAGE_DAYS = 7;
 
     // Events
-    event CityRegistered(string cityName, uint256 timestamp);
-    event SectorAdded(string cityName, string sectorName, uint256 timestamp);
+    event CityRegistered(string indexed cityName, uint256 timestamp);
+    event SectorAdded(string indexed cityName, string indexed sectorName, uint256 timestamp);
     event DailyDataRecorded(
         string indexed cityName,
         string indexed sector,
@@ -46,8 +49,19 @@ contract CityRegister is ERC20, Ownable {
         uint256 value
     );
 
-    constructor() ERC20("RPSTOKENS", "RPS") {
+    constructor() ERC20("RPSTOKENS", "RPS") Ownable(msg.sender) {
         _mint(msg.sender, 1000000 * 10 ** decimals());
+    }
+
+    modifier validCity(string memory cityName) {
+        require(bytes(cityName).length > 0, "City name cannot be empty");
+        require(cities[cityName].isRegistered, "City not registered");
+        _;
+    }
+
+    modifier validSector(string memory cityName, string memory sectorName) {
+        require(cities[cityName].sectors[sectorName].isActive, "Sector not active");
+        _;
     }
 
     function registerCity(string memory cityName) external onlyOwner {
@@ -64,8 +78,11 @@ contract CityRegister is ERC20, Ownable {
         emit CityRegistered(cityName, block.timestamp);
     }
 
-    function addSector(string memory cityName, string memory sectorName) external onlyOwner {
-        require(cities[cityName].isRegistered, "City not registered");
+    function addSector(string memory cityName, string memory sectorName) 
+        external 
+        onlyOwner 
+        validCity(cityName) 
+    {
         require(!cities[cityName].sectors[sectorName].isActive, "Sector already exists");
 
         City storage city = cities[cityName];
@@ -81,16 +98,19 @@ contract CityRegister is ERC20, Ownable {
         string memory sectorName,
         uint256 timestamp,
         uint256 value
-    ) external onlyOwner {
-        require(cities[cityName].isRegistered, "City not registered");
-        require(cities[cityName].sectors[sectorName].isActive, "Sector not active");
+    ) 
+        external 
+        onlyOwner 
+        validCity(cityName)
+        validSector(cityName, sectorName)
+    {
+        require(timestamp <= block.timestamp, "Future timestamp not allowed");
+        require(value > 0, "Value must be greater than 0");
 
-        // Convert the small decimal to a larger integer by multiplying by 1e18
-        uint256 scaledValue = value * 1e18;
+        uint256 scaledValue = value * SCALE_FACTOR;
         
         SectorData storage sector = cities[cityName].sectors[sectorName];
         
-        // Store the daily measurement
         DailyMeasurement storage measurement = sector.dailyData[timestamp];
         require(!measurement.recorded, "Data already recorded for this date");
         
@@ -99,38 +119,30 @@ contract CityRegister is ERC20, Ownable {
         measurement.recorded = true;
         sector.recordedDates.push(timestamp);
 
-        // Update maximum historical value if necessary
         if (scaledValue > sector.maxHistoricalValue) {
             sector.maxHistoricalValue = scaledValue;
         }
 
-        // Update rolling average
-        uint256 daysToAverage = 7; // Weekly rolling average
+        _updateRollingAverage(sector);
+
+        emit DailyDataRecorded(cityName, sectorName, timestamp, scaledValue);
+    }
+
+    function _updateRollingAverage(SectorData storage sector) private {
         uint256 totalValues = 0;
         uint256 count = 0;
         
-        for (uint256 i = sector.recordedDates.length; i > 0 && count < daysToAverage; i--) {
-            totalValues = totalValues.add(sector.dailyData[sector.recordedDates[i-1]].value);
+        uint256 length = sector.recordedDates.length;
+        uint256 startIndex = length >= ROLLING_AVERAGE_DAYS ? length - ROLLING_AVERAGE_DAYS : 0;
+        
+        for (uint256 i = startIndex; i < length; i++) {
+            totalValues = totalValues.add(sector.dailyData[sector.recordedDates[i]].value);
             count++;
         }
         
         if (count > 0) {
             sector.rollingAverage = totalValues.div(count);
         }
-
-        emit DailyDataRecorded(cityName, sectorName, timestamp, scaledValue);
-    }
-
-    function getDailyValue(
-        string memory cityName,
-        string memory sectorName,
-        uint256 timestamp
-    ) external view returns (uint256 value, bool recorded) {
-        require(cities[cityName].isRegistered, "City not registered");
-        require(cities[cityName].sectors[sectorName].isActive, "Sector not active");
-
-        DailyMeasurement storage measurement = cities[cityName].sectors[sectorName].dailyData[timestamp];
-        return (measurement.value, measurement.recorded);
     }
 
     function getSectorStats(

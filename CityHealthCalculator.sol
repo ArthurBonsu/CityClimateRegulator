@@ -4,7 +4,8 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-contract CityHealthCalculator is Ownable {
+contract CityHealthCalculator is Ownable(msg.sender) {  // Add constructor argument
+    using SafeMath for uint256;
     using SafeMath for uint256;
 
     struct DailyEmission {
